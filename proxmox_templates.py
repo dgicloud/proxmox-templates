@@ -6,7 +6,7 @@ import time
 #para funcionar deve instalar o pacote: libguestfs-tools com o comando apt-get install libguestfs-tools no nó proxmox 
 
 imagens = [ "https://cloud-images.ubuntu.com/bionic/current/bionic-server-cloudimg-amd64.img",
-"https://cloud-images.ubuntu.com/hirsute/current/hirsute-server-cloudimg-amd64.img",
+"https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img",
 "https://cdimage.debian.org/cdimage/openstack/current-10/debian-10-openstack-amd64.qcow2",
 "https://cdimage.debian.org/cdimage/openstack/current-9/debian-9-openstack-amd64.qcow2",
 "http://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2",
