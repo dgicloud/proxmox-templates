@@ -2,11 +2,12 @@
 # -*- coding: utf-8 -*-
 
 import os
+import time
 import random
 import logging
 import subprocess
 import json
-from typing import Optional
+from typing import Optional, Tuple
 from urllib.parse import urlparse
 from pathlib import Path
 
@@ -59,19 +60,35 @@ class CloudImageProcessor:
             self.logger.error(f"Erro ao obter storages: {str(e)}")
             return []
 
-    def run_command(self, command: str) -> bool:
+    def run_command(self, command: str) -> Tuple[bool, str]:
         """Executar comando do sistema e tratar erros."""
         try:
             self.logger.info(f"Executando comando: {command}")
             result = subprocess.run(command, shell=True, check=True, text=True,
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            return True
+            return True, result.stdout
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Falha no comando: {e.stderr}")
-            return False
+            return False, e.stderr
         except Exception as e:
             self.logger.error(f"Erro ao executar comando: {str(e)}")
-            return False
+            return False, str(e)
+
+    def wait_for_disk_import(self, vm_id: int, storage: str, volume_name: str, max_attempts: int = 30) -> bool:
+        """Aguardar até que o disco seja importado corretamente."""
+        self.logger.info("Aguardando a importação do disco ser concluída...")
+        
+        for attempt in range(max_attempts):
+            # Verificar se o volume existe no storage
+            success, output = self.run_command(f"pvesm list {storage}")
+            if success and volume_name in output:
+                self.logger.info("Disco importado com sucesso")
+                return True
+                
+            time.sleep(1)  # Aguardar 1 segundo antes da próxima verificação
+            
+        self.logger.error("Tempo limite excedido aguardando a importação do disco")
+        return False
 
     def create_cloud_init_config(self, vm_id: int) -> str:
         """Criar configuração cloud-init para a VM."""
@@ -124,40 +141,53 @@ class CloudImageProcessor:
             else:
                 # Baixar a imagem
                 self.logger.info(f"Baixando {image_name} para {self.images_dir}")
-                if not self.run_command(f"wget {cloud_img_url} -O {temp_image_path}"):
+                success, _ = self.run_command(f"wget {cloud_img_url} -O {temp_image_path}")
+                if not success:
                     return False
 
             # Converter imagem para formato qcow2 mantendo o tamanho original
             self.logger.info("Convertendo imagem para formato qcow2")
-            if not self.run_command(f"qemu-img convert -O qcow2 {temp_image_path} {final_image_path}"):
+            success, _ = self.run_command(f"qemu-img convert -O qcow2 {temp_image_path} {final_image_path}")
+            if not success:
                 return False
 
             # Criar configuração cloud-init
             config_path = self.create_cloud_init_config(vm_id)
 
             # Criar VM no Proxmox
-            commands = [
-                # Criar VM
-                f"qm create {vm_id} --memory 2048 --cores 2 --name {volume_name} --net0 virtio,bridge=vmbr0",
-                
-                # Importar disco
-                f"qm importdisk {vm_id} {final_image_path} {storage}",
-                
-                # Configurar definições da VM
+            success, _ = self.run_command(
+                f"qm create {vm_id} --memory 2048 --cores 2 --name {volume_name} --net0 virtio,bridge=vmbr0"
+            )
+            if not success:
+                return False
+
+            # Importar disco
+            self.logger.info("Importando disco...")
+            success, _ = self.run_command(f"qm importdisk {vm_id} {final_image_path} {storage}")
+            if not success:
+                return False
+
+            # Aguardar a importação do disco ser concluída
+            if not self.wait_for_disk_import(vm_id, storage, volume_name):
+                return False
+
+            # Configurar definições da VM
+            vm_configs = [
                 f"qm set {vm_id} --scsihw virtio-scsi-pci --scsi0 {storage}:{volume_name}",
                 f"qm set {vm_id} --ide2 {storage}:cloudinit",
                 f"qm set {vm_id} --boot c --bootdisk scsi0",
                 f"qm set {vm_id} --serial0 socket --vga serial0",
-                f"qm set {vm_id} --agent enabled=1",
-                
-                # Limpar arquivos temporários
-                f"rm -f {temp_image_path} {final_image_path} {config_path}"
+                f"qm set {vm_id} --agent enabled=1"
             ]
 
-            for command in commands:
-                if not self.run_command(command):
-                    self.logger.error(f"Falha ao executar comando: {command}")
+            for config_cmd in vm_configs:
+                success, _ = self.run_command(config_cmd)
+                if not success:
                     return False
+
+            # Limpar arquivos temporários
+            self.logger.info("Limpando arquivos temporários...")
+            self.run_command(f"rm -f {temp_image_path} {final_image_path} {config_path}")
 
             self.logger.info(f"Template da VM {vm_id} criado com sucesso")
             return True
