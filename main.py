@@ -175,9 +175,15 @@ class CloudImageProcessor:
             if not self.wait_for_disk_import(vm_id, storage, volume_name):
                 return False
 
+            # Obter o nome real do volume após importação
+            success, volume_list = self.run_command(f"pvesm list {storage}")
+            if not success:
+                return False
+
             # Configurar definições da VM
             vm_configs = [
-                f"qm set {vm_id} --scsihw virtio-scsi-pci --scsi0 {storage}:vm-{vm_id}-disk-0",
+                f"qm set {vm_id} --scsihw virtio-scsi-single",
+                f"qm set {vm_id} --scsi0 {storage}:base-{vm_id}-disk-0",
                 f"qm set {vm_id} --ide2 {storage}:cloudinit",
                 f"qm set {vm_id} --boot c --bootdisk scsi0",
                 f"qm set {vm_id} --serial0 socket --vga serial0",
