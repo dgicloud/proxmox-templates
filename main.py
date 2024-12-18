@@ -110,7 +110,9 @@ class CloudImageProcessor:
             # Gerar ID aleatório da VM entre 1030 e 1040
             vm_id = random.randint(1030, 1040)
             image_name = cloud_img_url.split("/")[-1]
-            final_image_name = f"vm-{vm_id}-disk-0.qcow2"
+            # Remover extensão do arquivo para usar como nome do volume
+            volume_name = os.path.splitext(image_name)[0]
+            final_image_name = f"{volume_name}.qcow2"
             
             # Definir caminhos completos para as imagens
             temp_image_path = os.path.join(self.images_dir, image_name)
@@ -136,13 +138,13 @@ class CloudImageProcessor:
             # Criar VM no Proxmox
             commands = [
                 # Criar VM
-                f"qm create {vm_id} --memory 2048 --cores 2 --name cloud-init-{vm_id} --net0 virtio,bridge=vmbr0",
+                f"qm create {vm_id} --memory 2048 --cores 2 --name {volume_name} --net0 virtio,bridge=vmbr0",
                 
                 # Importar disco
                 f"qm importdisk {vm_id} {final_image_path} {storage}",
                 
                 # Configurar definições da VM
-                f"qm set {vm_id} --scsihw virtio-scsi-pci --scsi0 {storage}:vm-{vm_id}-disk-0",
+                f"qm set {vm_id} --scsihw virtio-scsi-pci --scsi0 {storage}:{volume_name}",
                 f"qm set {vm_id} --ide2 {storage}:cloudinit",
                 f"qm set {vm_id} --boot c --bootdisk scsi0",
                 f"qm set {vm_id} --serial0 socket --vga serial0",
