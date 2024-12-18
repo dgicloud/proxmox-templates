@@ -177,7 +177,7 @@ class CloudImageProcessor:
 
             # Configurar definições da VM
             vm_configs = [
-                f"qm set {vm_id} --scsi0 {storage}:vm-{vm_id}-disk-0",
+                f"qm set {vm_id} --scsihw virtio-scsi-pci --scsi0 {storage}:vm-{vm_id}-disk-0",
                 f"qm set {vm_id} --ide2 {storage}:cloudinit",
                 f"qm set {vm_id} --boot c --bootdisk scsi0",
                 f"qm set {vm_id} --serial0 socket --vga serial0",
