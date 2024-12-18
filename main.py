@@ -80,6 +80,10 @@ class CloudImageProcessor:
         
         return config_path
 
+    def check_image_exists(self, image_path: str) -> bool:
+        """Verificar se a imagem já existe no diretório."""
+        return os.path.exists(image_path) and os.path.getsize(image_path) > 0
+
     def process_cloud_image(self, cloud_img_url: str) -> bool:
         """Processar imagem cloud e preparar para o Proxmox."""
         if not self.validate_url(cloud_img_url):
@@ -96,10 +100,14 @@ class CloudImageProcessor:
             temp_image_path = os.path.join(self.images_dir, image_name)
             final_image_path = os.path.join(self.images_dir, final_image_name)
             
-            # Baixar a imagem
-            self.logger.info(f"Baixando {image_name} para {self.images_dir}")
-            if not self.run_command(f"wget {cloud_img_url} -O {temp_image_path}"):
-                return False
+            # Verificar se a imagem já existe
+            if self.check_image_exists(temp_image_path):
+                self.logger.info(f"Imagem {image_name} já existe em {self.images_dir}, pulando download")
+            else:
+                # Baixar a imagem
+                self.logger.info(f"Baixando {image_name} para {self.images_dir}")
+                if not self.run_command(f"wget {cloud_img_url} -O {temp_image_path}"):
+                    return False
 
             # Converter e redimensionar a imagem para 32G
             self.logger.info("Convertendo e redimensionando imagem")
@@ -118,11 +126,11 @@ class CloudImageProcessor:
                 f"qm create {vm_id} --memory 2048 --cores 2 --name cloud-init-{vm_id} --net0 virtio,bridge=vmbr0",
                 
                 # Importar disco
-                f"qm importdisk {vm_id} {final_image_path} local-lvm",
+                f"qm importdisk {vm_id} {final_image_path} local",
                 
                 # Configurar definições da VM
-                f"qm set {vm_id} --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-{vm_id}-disk-0",
-                f"qm set {vm_id} --ide2 local-lvm:cloudinit",
+                f"qm set {vm_id} --scsihw virtio-scsi-pci --scsi0 local:vm-{vm_id}-disk-0",
+                f"qm set {vm_id} --ide2 local:cloudinit",
                 f"qm set {vm_id} --boot c --bootdisk scsi0",
                 f"qm set {vm_id} --serial0 socket --vga serial0",
                 f"qm set {vm_id} --agent enabled=1",
