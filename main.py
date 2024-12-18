@@ -165,25 +165,14 @@ class CloudImageProcessor:
             if not success:
                 return False
 
-            # Importar disco
-            self.logger.info("Importando disco...")
-            success, _ = self.run_command(f"qm importdisk {vm_id} {final_image_path} {storage} --format qcow2")
-            if not success:
-                return False
-
-            # Aguardar a importação do disco ser concluída
-            if not self.wait_for_disk_import(vm_id, storage, volume_name):
-                return False
-
-            # Obter o nome real do volume após importação
-            success, volume_list = self.run_command(f"pvesm list {storage}")
+            # Importar e anexar o disco diretamente
+            self.logger.info("Importando e anexando disco...")
+            success, _ = self.run_command(f"qm set {vm_id} --scsi0 {storage}:0,import-from={final_image_path}")
             if not success:
                 return False
 
             # Configurar definições da VM
             vm_configs = [
-                f"qm set {vm_id} --scsihw virtio-scsi-single",
-                f"qm set {vm_id} --scsi0 {storage}:base-{vm_id}-disk-0",
                 f"qm set {vm_id} --ide2 {storage}:cloudinit",
                 f"qm set {vm_id} --boot c --bootdisk scsi0",
                 f"qm set {vm_id} --serial0 socket --vga serial0",
