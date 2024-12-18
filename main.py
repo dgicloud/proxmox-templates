@@ -78,14 +78,18 @@ class CloudImageProcessor:
         """Aguardar até que o disco seja importado corretamente."""
         self.logger.info("Aguardando a importação do disco ser concluída...")
         
+        # O Proxmox adiciona o prefixo vm-[ID]-disk- ao nome do volume
+        expected_volume = f"vm-{vm_id}-disk-0"
+        
         for attempt in range(max_attempts):
             # Verificar se o volume existe no storage
             success, output = self.run_command(f"pvesm list {storage}")
-            if success and volume_name in output:
+            if success and expected_volume in output:
                 self.logger.info("Disco importado com sucesso")
                 return True
                 
             time.sleep(1)  # Aguardar 1 segundo antes da próxima verificação
+            self.logger.info(f"Tentativa {attempt + 1}/{max_attempts} - Aguardando importação do disco...")
             
         self.logger.error("Tempo limite excedido aguardando a importação do disco")
         return False
@@ -163,7 +167,7 @@ class CloudImageProcessor:
 
             # Importar disco
             self.logger.info("Importando disco...")
-            success, _ = self.run_command(f"qm importdisk {vm_id} {final_image_path} {storage}")
+            success, _ = self.run_command(f"qm importdisk {vm_id} {final_image_path} {storage} --format qcow2")
             if not success:
                 return False
 
