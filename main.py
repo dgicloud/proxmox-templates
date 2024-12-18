@@ -160,7 +160,7 @@ class CloudImageProcessor:
 
             # Criar VM no Proxmox
             success, _ = self.run_command(
-                f"qm create {vm_id} --memory 2048 --cores 2 --name {volume_name} --net0 virtio,bridge=vmbr0"
+                f"qm create {vm_id} --memory 2048 --cores 2 --name {volume_name} --net0 virtio,bridge=vmbr0 --machine q35 --scsihw virtio-scsi-single"
             )
             if not success:
                 return False
@@ -177,7 +177,7 @@ class CloudImageProcessor:
 
             # Configurar definições da VM
             vm_configs = [
-                f"qm set {vm_id} --scsihw virtio-scsi-pci --scsi0 {storage}:vm-{vm_id}-disk-0",
+                f"qm set {vm_id} --scsi0 {storage}:vm-{vm_id}-disk-0",
                 f"qm set {vm_id} --ide2 {storage}:cloudinit",
                 f"qm set {vm_id} --boot c --bootdisk scsi0",
                 f"qm set {vm_id} --serial0 socket --vga serial0",
